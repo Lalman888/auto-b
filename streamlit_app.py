@@ -39,6 +39,8 @@ async def solve_captcha(page):
 async def get_url(search_url, proxy_account, search_keyword="keyword", proxy_option=False):
     async with async_playwright() as p:
         proxy = proxy_account        
+        browser = None
+        page = None
         while True:
             try:
                 if proxy_option:
@@ -71,8 +73,10 @@ async def get_url(search_url, proxy_account, search_keyword="keyword", proxy_opt
             except Exception as e:
                 print(e)
             finally:
-                await page.close()
-                await browser.close()
+                if page:
+                    await page.close()
+                if browser:
+                    await browser.close()
 
 # Function to create proxy accounts
 def make_number_list(start, end, n):
