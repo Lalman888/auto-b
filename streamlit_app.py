@@ -1,109 +1,74 @@
 import streamlit as st
-from playwright.async_api import async_playwright
-import asyncio
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import os
 from dotenv import load_dotenv
 from twocaptcha import TwoCaptcha
 from urllib.parse import urlparse
-import subprocess
 
 # Load environment variables
 load_dotenv()
 TWOCAPTCHA_API_KEY = os.getenv('TWOCAPTCHA_API_KEY', 'd5fa15aa1ebe69e79826793890792f77')  # Replace with your actual API key
 
-# Function to install Playwright system dependencies
-def install_system_dependencies():
-    try:
-        st.write("Checking and installing system dependencies for Playwright...")
-        subprocess.run([
-            "sudo", "apt-get", "install", "-y",
-            "libnss3", "libnspr4", "libatk1.0-0", "libatk-bridge2.0-0", 
-            "libcups2", "libdrm2", "libatspi2.0-0", "libxcomposite1", 
-            "libxdamage1", "libxfixes3", "libxrandr2", "libgbm1", 
-            "libxkbcommon0", "libpango-1.0-0", "libcairo2", "libasound2"
-        ], check=True)
-        st.write("System dependencies installed successfully.")
-    except Exception as e:
-        st.write(f"An error occurred while installing system dependencies: {e}")
-
-# Install Playwright browsers if not already installed
-def install_playwright_browsers():
-    playwright_cache = os.path.join(os.path.expanduser("~"), ".cache/ms-playwright")
-    if not os.path.exists(playwright_cache):
-        st.write("Installing Playwright browsers...")
-        subprocess.run(["playwright", "install"], check=True)
-        st.write("Playwright browsers installed successfully.")
-
-# Ensure all dependencies are installed
-install_system_dependencies()
-install_playwright_browsers()
-
-# Function to solve captcha
-async def solve_captcha(page):
+# Function to solve captcha using 2Captcha
+def solve_captcha(driver, site_key, url):
     solver = TwoCaptcha(TWOCAPTCHA_API_KEY)
     try:
-        recaptcha_element = await page.query_selector('div.g-recaptcha')
-        await page.wait_for_load_state() 
-        if recaptcha_element:
-            site_key = await recaptcha_element.get_attribute('data-sitekey')
-            data_s = await recaptcha_element.get_attribute('data-s')
-            response = solver.recaptcha(
-                sitekey=site_key,
-                url=page.url,
-                data_s=data_s
-            )
-            code = response['code']
-            response_textarea = await recaptcha_element.query_selector('textarea#g-recaptcha-response')
-
-            if response_textarea:
-                await response_textarea.evaluate('el => el.value = "{}"'.format(code))
-
-            await page.wait_for_load_state()  
+        result = solver.recaptcha(sitekey=site_key, url=url)
+        response_code = result['code']
+        driver.execute_script(f'document.getElementById("g-recaptcha-response").innerHTML = "{response_code}";')
+        return True
     except Exception as e:
-        print(e)
+        print(f"Captcha solving error: {e}")
+        return False
 
 # Function to perform search and click
-async def get_url(search_url, proxy_account, search_keyword="keyword", proxy_option=False):
-    async with async_playwright() as p:
-        proxy = proxy_account        
-        browser = None
-        page = None
-        while True:
-            try:
-                if proxy_option:
-                    browser = await p.chromium.launch(headless=False, proxy=proxy)
-                else:
-                    browser = await p.chromium.launch(headless=False)
-                context = await browser.new_context()
-                page = await context.new_page()
-                await page.goto("https://www.google.com/")
-                await solve_captcha(page)
-                await page.fill('css=[name="q"]', search_keyword)
-                await page.press('css=[name="q"]', "Enter")
-                await solve_captcha(page)
+def get_url(search_url, proxy, search_keyword="keyword"):
+    try:
+        options = webdriver.ChromeOptions()
+        if proxy:
+            options.add_argument(f'--proxy-server={proxy["server"]}:{proxy["port"]}')
 
-                elements = await page.query_selector_all('div.v5yQqb')
-                await page.wait_for_load_state()
-                
-                for element in elements:
-                    anchor = await element.query_selector('a[attributionsrc]')
-                    await page.wait_for_load_state()
-                    if anchor:
-                        url = await page.evaluate('(element) => element.href', anchor)
-                        await page.wait_for_load_state()
-                        
-                        if search_url in url.lower():
-                            a_node = await element.query_selector('a.sVXRqc')
-                            await page.wait_for_load_state()
-                            await a_node.click()
-                            await page.wait_for_load_state()
+        driver = webdriver.Chrome(options=options)
+        driver.get("https://www.google.com/")
+
+        # Wait for the search box to load and then perform search
+        search_box = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.NAME, "q"))
+        )
+        search_box.send_keys(search_keyword)
+        search_box.send_keys(Keys.RETURN)
+
+        # Wait for search results to load
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.g"))
+        )
+
+        # Solve CAPTCHA if present
+        try:
+            captcha_box = driver.find_element(By.CLASS_NAME, 'g-recaptcha')
+            site_key = captcha_box.get_attribute('data-sitekey')
+            solve_captcha(driver, site_key, driver.current_url)
+        except:
+            pass
+
+        elements = driver.find_elements(By.CSS_SELECTOR, 'div.g')
+        for element in elements:
+            try:
+                anchor = element.find_element(By.TAG_NAME, 'a')
+                url = anchor.get_attribute('href')
+                if search_url in url.lower():
+                    anchor.click()
+                    break
             except Exception as e:
-                print(e)
-            finally:
-                if page:
-                    await page.close()
-                if browser:
-                    await browser.close()
+                print(f"Error finding or clicking on search result: {e}")
+
+        driver.quit()
+    except Exception as e:
+        print(f"Error during browser automation: {e}")
 
 # Function to create proxy accounts
 def make_number_list(start, end, n):
@@ -116,7 +81,8 @@ def get_proxy_accounts(num_of_proxy, proxy_server, proxy_username, proxy_passwor
     port_list = make_number_list(start_port, end_port, num_of_proxy)
     for i in range(num_of_proxy):
         proxy_account = {
-            "server": f'{proxy_server}:{port_list[i]}',
+            "server": proxy_server,
+            "port": port_list[i],
             "username": proxy_username,
             "password": proxy_password
         }
@@ -124,11 +90,11 @@ def get_proxy_accounts(num_of_proxy, proxy_server, proxy_username, proxy_passwor
     return proxy_accounts
 
 # Main function to run tasks
-async def main(url_list, proxy_server, proxy_username, proxy_password, start_port, end_port):
+def main(url_list, proxy_server, proxy_username, proxy_password, start_port, end_port):
     task_list = url_list
     proxy_accounts = get_proxy_accounts(len(task_list), proxy_server, proxy_username, proxy_password, start_port, end_port)
-    tasks = [get_url(search_url=task_list[i].get("search_url"), proxy_account=proxy_accounts[i], search_keyword=task_list[i].get("search_keyword")) for i in range(len(task_list))]
-    await asyncio.gather(*tasks)
+    for i in range(len(task_list)):
+        get_url(search_url=task_list[i].get("search_url"), proxy=proxy_accounts[i], search_keyword=task_list[i].get("search_keyword"))
 
 # Function to extract domain from URL
 def extract_domain(url):
@@ -172,7 +138,7 @@ search_file = st.file_uploader('Upload search.txt file', type='txt')
 if st.button('Start'):
     if search_file is not None:
         url_list = parse_file(search_file)
-        asyncio.run(main(url_list, proxy_address, proxy_username, proxy_password, proxy_start_port, proxy_end_port))
+        main(url_list, proxy_address, proxy_username, proxy_password, proxy_start_port, proxy_end_port)
         st.write("Completed all iterations")
     else:
         st.write("Please upload the search.txt file")

@@ -1,6 +1,7 @@
+# Use a base image with Python and apt-get
 FROM python:3.9-slim
 
-# Install necessary system dependencies
+# Install necessary system dependencies for Playwright
 RUN apt-get update && apt-get install -y \
     libnss3 \
     libnspr4 \
@@ -17,16 +18,24 @@ RUN apt-get update && apt-get install -y \
     libxkbcommon0 \
     libpango-1.0-0 \
     libcairo2 \
-    libasound2 \
-    && rm -rf /var/lib/apt/lists/*
+    libasound2 && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install Playwright and dependencies
-RUN pip install playwright
-RUN playwright install
-
-# Add your application code here
-COPY . /app
+# Set the working directory
 WORKDIR /app
 
-# Run your Streamlit app
+# Copy the requirements file and install dependencies
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright browsers
+RUN playwright install --with-deps
+
+# Copy the rest of the application code
+COPY . /app
+
+# Expose the port Streamlit runs on
+EXPOSE 8501
+
+# Run the Streamlit app
 CMD ["streamlit", "run", "streamlit_app.py"]
