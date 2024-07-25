@@ -11,6 +11,21 @@ import subprocess
 load_dotenv()
 TWOCAPTCHA_API_KEY = os.getenv('TWOCAPTCHA_API_KEY', 'd5fa15aa1ebe69e79826793890792f77')  # Replace with your actual API key
 
+# Function to install Playwright system dependencies
+def install_system_dependencies():
+    try:
+        st.write("Checking and installing system dependencies for Playwright...")
+        subprocess.run([
+            "sudo", "apt-get", "install", "-y",
+            "libnss3", "libnspr4", "libatk1.0-0", "libatk-bridge2.0-0", 
+            "libcups2", "libdrm2", "libatspi2.0-0", "libxcomposite1", 
+            "libxdamage1", "libxfixes3", "libxrandr2", "libgbm1", 
+            "libxkbcommon0", "libpango-1.0-0", "libcairo2", "libasound2"
+        ], check=True)
+        st.write("System dependencies installed successfully.")
+    except Exception as e:
+        st.write(f"An error occurred while installing system dependencies: {e}")
+
 # Install Playwright browsers if not already installed
 def install_playwright_browsers():
     playwright_cache = os.path.join(os.path.expanduser("~"), ".cache/ms-playwright")
@@ -19,6 +34,8 @@ def install_playwright_browsers():
         subprocess.run(["playwright", "install"], check=True)
         st.write("Playwright browsers installed successfully.")
 
+# Ensure all dependencies are installed
+install_system_dependencies()
 install_playwright_browsers()
 
 # Function to solve captcha
@@ -139,7 +156,7 @@ def parse_file(file):
     return search_list
 
 # Streamlit UI
-st.title('Auto-Click ')
+st.title('Auto-Click Bot')
 
 # Proxy settings
 proxy_username = st.text_input('Proxy Username')
