@@ -5,10 +5,21 @@ import os
 from dotenv import load_dotenv
 from twocaptcha import TwoCaptcha
 from urllib.parse import urlparse
+import subprocess
 
 # Load environment variables
 load_dotenv()
 TWOCAPTCHA_API_KEY = os.getenv('TWOCAPTCHA_API_KEY', 'd5fa15aa1ebe69e79826793890792f77')  # Replace with your actual API key
+
+# Install Playwright browsers if not already installed
+def install_playwright_browsers():
+    playwright_cache = os.path.join(os.path.expanduser("~"), ".cache/ms-playwright")
+    if not os.path.exists(playwright_cache):
+        st.write("Installing Playwright browsers...")
+        subprocess.run(["playwright", "install"], check=True)
+        st.write("Playwright browsers installed successfully.")
+
+install_playwright_browsers()
 
 # Function to solve captcha
 async def solve_captcha(page):
@@ -128,7 +139,7 @@ def parse_file(file):
     return search_list
 
 # Streamlit UI
-st.title('Auto-Click Bot')
+st.title('Auto-Click ')
 
 # Proxy settings
 proxy_username = st.text_input('Proxy Username')
