@@ -5,11 +5,10 @@ import os
 from dotenv import load_dotenv
 from twocaptcha import TwoCaptcha
 from urllib.parse import urlparse
-import random
 
 # Load environment variables
 load_dotenv()
-TWOCAPTCHA_API_KEY = os.getenv('TWOCAPTCHA_API_KEY')
+TWOCAPTCHA_API_KEY = os.getenv('TWOCAPTCHA_API_KEY', 'd5fa15aa1ebe69e79826793890792f77')  # Replace with your actual API key
 
 # Function to solve captcha
 async def solve_captcha(page):
